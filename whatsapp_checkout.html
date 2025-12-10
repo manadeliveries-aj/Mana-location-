@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checkout — WhatsApp Order</title>
+  <!-- Link to existing theme css in the project -->
+  <link rel="stylesheet" href="assets/css/theme.css">
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 1.5rem; }
+    .container { max-width: 900px; margin: 0 auto; }
+    .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: white; }
+    .btn { display:inline-block; padding: .6rem 1rem; border-radius: 8px; cursor:pointer; border:none; font-weight:600; }
+    .btn-primary { background: #16a34a; color: white; }
+    .btn-secondary { background: #f3f4f6; color: #111827; }
+    pre.msg { white-space: pre-wrap; background: #f9fafb; padding: .75rem; border-radius: 6px; }
+    .note { font-size: .9rem; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Checkout — Place order via WhatsApp</h1>
+    <p class="note">This page captures your live location (with your permission) and opens WhatsApp with a prefilled order message to the merchant number <strong>+91 77990 86877</strong>.</p>
+
+    <div id="cart-container" class="card">
+      <h2>Your cart</h2>
+      <div id="cart-list"></div>
+      <p><strong>Total: ₹<span id="cart-total">0</span></strong></p>
+    </div>
+
+    <div class="card">
+      <h2>Customer details</h2>
+      <label>Name<br/><input id="cust-name" placeholder="Your name" style="width:100%; padding:.5rem; margin-top:.25rem;"/></label><br/><br/>
+      <label>Phone<br/><input id="cust-phone" placeholder="Contact number" style="width:100%; padding:.5rem; margin-top:.25rem;"/></label>
+    </div>
+
+    <div class="card">
+      <button id="whatsapp-btn" class="btn btn-primary">Place order via WhatsApp</button>
+      <button id="clear-btn" class="btn btn-secondary" style="margin-left:.5rem">Clear demo cart</button>
+      <p class="note" style="margin-top:.5rem">You will be asked to allow location access. After accepting, WhatsApp (or WhatsApp Web) will open with your order message — you must press <em>Send</em> to complete the order.</p>
+    </div>
+
+    <div class="card">
+      <h3>Generated message preview</h3>
+      <pre id="msg-preview" class="msg">(message will appear here)</pre>
+    </div>
+  </div>
+
+<script>
+// Merchant WhatsApp number (no plus sign)
+const MERCHANT_NUMBER = '7799086877';
+
+// Cart source: try to read from localStorage key 'cart' (assumed array of {name,qty,price}), otherwise seed demo cart
+function loadCart() {
+  try {
+    const raw = localStorage.getItem('cart');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch(e){ console.warn('cart parse error', e) }
+  // fallback demo cart
+  return [
+    { name: "Apples (1kg)", qty: 2, price: 120 },
+    { name: "Milk 1L", qty: 1, price: 45 },
+    { name: "Bread (Loaf)", qty: 1, price: 35 }
+  ];
+}
+
+function saveCart(cart) {
+  localStorage.setItem('cart', JSON.stringify(cart));
+}
+
+function renderCart(cart) {
+  const list = document.getElementById('cart-list');
+  list.innerHTML = '';
+  cart.forEach((it, idx) => {
+    const el = document.createElement('div');
+    el.style.display = 'flex';
+    el.style.justifyContent = 'space-between';
+    el.style.alignItems = 'center';
+    el.style.padding = '.3rem 0';
+    el.innerHTML = `<div><strong>${it.name}</strong><div style="font-size:.9rem;color:#6b7280">Qty: ${it.qty} • ₹${it.price} each</div></div>
+                    <div>₹${(it.qty*it.price).toFixed(0)}</div>`;
+    list.appendChild(el);
+  });
+  const total = cart.reduce((s,it)=>s+it.qty*it.price,0);
+  document.getElementById('cart-total').innerText = total.toFixed(0);
+  updateMessagePreview(cart, total);
+}
+
+function formatCartItems(items) {
+  return items.map(it => `• ${it.name} x${it.qty} — ₹${it.price * it.qty}`).join('\n');
+}
+
+function buildBaseMessage(cart, total, name, phone) {
+  const itemsText = formatCartItems(cart);
+  const header = `New order from website\n${name ? 'Name: ' + name + '\n' : ''}${phone ? 'Contact: ' + phone + '\n' : ''}`;
+  const totalText = `Total: ₹${total}`;
+  const footer = '\n---\nPlease share your preferred delivery time if any.';
+  return `${header}\n${itemsText}\n${totalText}${footer}`;
+}
+
+function updateMessagePreview(cart, total) {
+  const name = document.getElementById('cust-name').value.trim();
+  const phone = document.getElementById('cust-phone').value.trim();
+  const message = buildBaseMessage(cart, total, name, phone) + '\nLocation: (not captured yet)';
+  document.getElementById('msg-preview').innerText = message;
+}
+
+// Main flow: ask geolocation then open WhatsApp click-to-chat with message + google maps link
+async function sendViaWhatsApp(cart) {
+  const total = cart.reduce((s,it)=>s+it.qty*it.price,0);
+  const name = document.getElementById('cust-name').value.trim();
+  const phone = document.getElementById('cust-phone').value.trim();
+  const baseMessage = buildBaseMessage(cart, total, name, phone);
+
+  function openWithMessage(msg) {
+    const encoded = encodeURIComponent(msg);
+    const waUrl = `https://wa.me/${MERCHANT_NUMBER}?text=${encoded}`;
+    window.open(waUrl, '_blank');
+    document.getElementById('msg-preview').innerText = msg;
+  }
+
+  if (!navigator.geolocation) {
+    openWithMessage(baseMessage + '\nLocation: (geolocation not supported)');
+    return;
+  }
+
+  // show a temporary status
+  document.getElementById('whatsapp-btn').innerText = 'Requesting location...';
+  document.getElementById('whatsapp-btn').disabled = true;
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude.toFixed(6);
+      const lon = pos.coords.longitude.toFixed(6);
+      const mapsLink = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+      const message = `${baseMessage}\nLocation: ${mapsLink} (lat:${lat}, lon:${lon})`;
+      openWithMessage(message);
+      document.getElementById('whatsapp-btn').innerText = 'Place order via WhatsApp';
+      document.getElementById('whatsapp-btn').disabled = false;
+    },
+    (err) => {
+      console.warn('geolocation error', err);
+      const message = baseMessage + '\nLocation: (permission denied or unavailable)';
+      openWithMessage(message);
+      document.getElementById('whatsapp-btn').innerText = 'Place order via WhatsApp';
+      document.getElementById('whatsapp-btn').disabled = false;
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  );
+}
+
+// Wire UI
+const cart = loadCart();
+renderCart(cart);
+document.getElementById('cust-name').addEventListener('input', ()=> updateMessagePreview(cart, cart.reduce((s,i)=>s+i.qty*i.price,0)));
+document.getElementById('cust-phone').addEventListener('input', ()=> updateMessagePreview(cart, cart.reduce((s,i)=>s+i.qty*i.price,0)));
+document.getElementById('whatsapp-btn').addEventListener('click', ()=> sendViaWhatsApp(cart));
+document.getElementById('clear-btn').addEventListener('click', ()=> { localStorage.removeItem('cart'); alert('Demo cart cleared. Reload to see fallback demo items.'); });
+
+</script>
+</body>
+</html>

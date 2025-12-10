@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Cart - FreshCart</title>
+<link rel="stylesheet" href="./assets/css/theme.css">
+<style>
+.container{max-width:900px;margin:2rem auto;background:#fff;padding:1rem;border-radius:8px;}
+.btn-primary{background:#16a34a;color:#fff;padding:.6rem 1rem;border-radius:6px;border:none}
+.item{display:flex;justify-content:space-between;padding:.6rem 0;border-bottom:1px solid #eee}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Your Cart</h1>
+  <div id="cart-items"></div>
+  <p><strong>Total: ₹<span id="cart-total">0</span></strong></p>
+  <div style="margin-top:1rem;">
+    <button id="checkout-whatsapp" class="btn-primary">Checkout via WhatsApp</button>
+    <button id="clear-cart" style="margin-left:8px;">Clear Cart</button>
+  </div>
+</div>
+
+<script>
+function loadCart(){ try{ return JSON.parse(localStorage.getItem('cart'))||[] }catch(e){return []} }
+function saveCart(c){ localStorage.setItem('cart', JSON.stringify(c)); renderCart(); }
+function renderCart(){
+  const cart = loadCart();
+  const container = document.getElementById('cart-items');
+  container.innerHTML = '';
+  if(cart.length===0){ container.innerHTML = '<p>Your cart is empty.</p>'; document.getElementById('cart-total').innerText = '0'; return;}
+  let total=0;
+  cart.forEach((it,idx)=>{
+    const div = document.createElement('div'); div.className='item';
+    div.innerHTML = '<div><strong>'+it.name+'</strong><div style="font-size:.9rem;color:#666">Qty: '+it.qty+'</div></div><div>₹'+(it.price*it.qty).toFixed(0)+'</div>';
+    container.appendChild(div);
+    total += (it.price*it.qty);
+  });
+  document.getElementById('cart-total').innerText = total.toFixed(0);
+}
+document.getElementById('clear-cart').addEventListener('click', function(){ localStorage.removeItem('cart'); renderCart(); });
+document.getElementById('checkout-whatsapp').addEventListener('click', function(){
+  const cart = loadCart();
+  if(!cart || cart.length===0){ alert('Cart is empty'); return; }
+  const name = prompt('Your name (optional):')||'';
+  const phone = prompt('Contact number (optional):')||'';
+  const total = cart.reduce((s,i)=>s+i.price*i.qty,0);
+  let base = (name?('Name: '+name+'\n'):'') + (phone?('Phone: '+phone+'\n'):'') + 'Items:\n' + cart.map(i=>'• '+i.name+' x'+i.qty+' — ₹'+(i.price*i.qty)).join('\n') + '\nTotal: ₹'+total;
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(function(pos){
+      const lat=pos.coords.latitude.toFixed(6), lon=pos.coords.longitude.toFixed(6);
+      const maps = 'https://www.google.com/maps/search/?api=1&query='+lat+','+lon;
+      const msg = base + '\nLocation: '+maps;
+      window.open('https://wa.me/7799086877?text='+encodeURIComponent(msg),'_blank');
+    }, function(err){
+      const msg = base + '\nLocation: (not provided)';
+      window.open('https://wa.me/7799086877?text='+encodeURIComponent(msg),'_blank');
+    }, {enableHighAccuracy:true, timeout:15000});
+  } else {
+    window.open('https://wa.me/7799086877?text='+encodeURIComponent(base+'\nLocation: (not supported)'),'_blank');
+  }
+});
+renderCart();
+</script>
+</body>
+</html>

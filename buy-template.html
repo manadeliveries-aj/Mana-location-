@@ -1,0 +1,56 @@
+<div class="fixed bottom-0 right-0 m-4">
+    <a href="#!" rel="noopener noreferrer"
+        class="btn inline-flex items-center gap-x-2 bg-green-600 text-white border-green-600 disabled:opacity-50 disabled:pointer-events-none hover:text-white hover:bg-green-700 hover:border-green-700 active:bg-green-700 active:border-green-700 focus:outline-none focus:ring-4 focus:ring-green-300">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            class="icon icon-tabler icons-tabler-outline icon-tabler-shopping-cart">
+            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+            <path d="M6 19m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+            <path d="M17 19m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+            <path d="M17 17h-11v-14h-2" />
+            <path d="M6 5l14 1l-1 7h-13" />
+        </svg>
+        Buy Pro <span class="cart-count" style="margin-left:6px;background:#fff;padding:2px 6px;border-radius:12px;font-weight:600">0</span>
+    </a>
+</div>
+<!-- WhatsApp Checkout Button -->
+<div class="whatsapp-checkout" style="margin-top:1rem;">
+  <button id="open-whatsapp-order" class="btn btn-primary">Place order via WhatsApp</button>
+</div>
+<script>
+document.getElementById('open-whatsapp-order')?.addEventListener('click', function(){
+  try {
+    let cart = [];
+    try { cart = JSON.parse(localStorage.getItem('cart')) || []; } catch(e){}
+    if(!Array.isArray(cart) || cart.length==0){
+      document.querySelectorAll('.cart-item, .product-item, .product-listing').forEach(function(el){
+        const name = el.querySelector('.product-name')?.innerText || el.querySelector('h4')?.innerText || el.querySelector('h3')?.innerText || 'Item';
+        const qty = el.querySelector('.qty') ? parseInt(el.querySelector('.qty').value||1) : 1;
+        const priceText = el.querySelector('.price')?.innerText || el.querySelector('.product-price')?.innerText || '';
+        const price = parseFloat((priceText.match(/[\d\.]+/)||[0])[0]) || 0;
+        cart.push({name, qty, price});
+      });
+    }
+    const total = cart.reduce((s,i)=>s+i.qty*i.price,0);
+    const name = window.prompt('Your name (optional):') || '';
+    const phone = window.prompt('Contact number (optional):') || '';
+    const base = `${name?('Name: '+name+'\n'):''}${phone?('Phone: '+phone+'\n'):''}Items:\n` + cart.map(i=>`• ${i.name} x${i.qty} — ₹${i.price*i.qty}`).join('\n') + `\nTotal: ₹${total}`;
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(function(pos){
+        const lat=pos.coords.latitude.toFixed(6), lon=pos.coords.longitude.toFixed(6);
+        const maps = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+        const msg = base + '\nLocation: ' + maps;
+        const url = 'https://wa.me/7799086877?text=' + encodeURIComponent(msg);
+        window.open(url,'_blank');
+      }, function(err){
+        const msg = base + '\nLocation: (not provided)';
+        const url = 'https://wa.me/7799086877?text=' + encodeURIComponent(msg);
+        window.open(url,'_blank');
+      }, {enableHighAccuracy:true, timeout:15000});
+    } else {
+      const url = 'https://wa.me/7799086877?text=' + encodeURIComponent(base + '\nLocation: (not supported)');
+      window.open(url,'_blank');
+    }
+  } catch(e){ alert('Failed to build order: '+e.message) }
+});
+</script>
